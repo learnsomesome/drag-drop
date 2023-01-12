@@ -488,7 +488,9 @@ function App() {
 
               setRooms((items) => {
                 const item = items[activeId as UniqueIdentifier];
-                const isRC = (activeId as string).split("-")[0] === "Room";
+                const isRC =
+                  originalActiveContainer === "C" &&
+                  (activeId as string).split("-")[0] === "Room";
 
                 return {
                   ...items,
@@ -499,13 +501,14 @@ function App() {
                     pedding: false,
                     title: item?.title ?? (activeId as string).split("-")[0],
                     id: item?.id ?? activeId,
-                    roomTypeCode: item?.roomTypeCode ?? isRC ? "B6" : null,
+                    roomTypeCode: item?.roomTypeCode ?? (isRC ? "B6" : null),
                     noBeds: item?.noBeds ?? !isRC,
-                    beds: (item?.beds ?? isRC
-                      ? new Array(6).fill("").map((item, index) => ({
-                          bedNo: index + 1,
-                        }))
-                      : null) as any[],
+                    beds: (item?.beds ??
+                      (isRC
+                        ? new Array(6).fill("").map((item, index) => ({
+                            bedNo: index + 1,
+                          }))
+                        : null)) as any[],
                   } as Room,
                 };
               });
