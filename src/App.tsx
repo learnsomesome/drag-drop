@@ -31,7 +31,7 @@ import {
 } from "./constant";
 
 import styles from "./App.module.less";
-import { Button, Modal } from "antd";
+// import { Button, Modal } from "antd";
 
 type Items = Record<UniqueIdentifier, UniqueIdentifier[]>;
 type Bed = {
@@ -42,8 +42,8 @@ export type Room = {
   title: string;
   roomTypeCode: string;
   pedding: boolean;
-  x?: number;
-  y?: number;
+  x: number;
+  y: number;
   noBeds?: boolean;
   beds: Bed[];
 };
@@ -63,11 +63,13 @@ function App() {
   const [clonedItems, setClonedItems] = useState<Items | null>(null);
   const [deviationRepair, setDeviationRepair] = useState(false);
   const [handle, setHandle] = useState(false);
+  const [lineTargets, setLineTargets] = useState({});
   // const [visible, setVisible] = useState(false);
   const containers = Object.keys(items) as UniqueIdentifier[];
 
   console.log("handle", handle);
   console.log("Rooms", rooms);
+  console.log("lineTargets", lineTargets);
 
   /**
    * Custom collision detection strategy optimized for multiple containers
@@ -224,6 +226,67 @@ function App() {
           )
       )
     );
+  };
+
+  const renderLine = (
+    coordinateSet: number[],
+    originalPoint: number,
+    direction: string
+  ) => {
+    const xDirection = ["x1", "x2"].includes(direction);
+
+    if (coordinateSet.length < 2) {
+      setLineTargets((lineTargets: any) => {
+        lineTargets[direction] && delete lineTargets[direction];
+
+        return { ...lineTargets };
+      });
+
+      return;
+    }
+
+    const length = Math.max(...coordinateSet) - Math.min(...coordinateSet);
+
+    setLineTargets((target) => ({
+      ...target,
+      [direction]: {
+        top: xDirection ? originalPoint : Math.min(...coordinateSet),
+        left: xDirection ? Math.min(...coordinateSet) : originalPoint,
+        [xDirection ? "width" : "height"]: `${length}px`,
+      },
+    }));
+  };
+
+  const updateLineTargets = (x: number, y: number) => {
+    const x1_list = [x];
+    const y1_list = [y];
+    const x2_list = [x];
+    const y2_list = [y];
+
+    Object.entries(rooms).forEach(([id, room]) => {
+      if (id !== activeId && !room.pedding) {
+        if ([room.x, room.x + GRID_SIZE * 6].includes(x)) {
+          y1_list.push(room.y, room.y + GRID_SIZE * 3);
+        }
+
+        if ([room.x, room.x + GRID_SIZE * 6].includes(x + GRID_SIZE * 6)) {
+          y2_list.push(room.y, room.y + GRID_SIZE * 3);
+        }
+
+        if ([room.y, room.y + GRID_SIZE * 3].includes(y)) {
+          x1_list.push(room.x, room.x + GRID_SIZE * 6);
+        }
+
+        if ([room.y, room.y + GRID_SIZE * 3].includes(y + GRID_SIZE * 3)) {
+          x2_list.push(room.x, room.x + GRID_SIZE * 6);
+        }
+      }
+    });
+
+    renderLine(x1_list, y, "x1");
+    renderLine(y1_list, x, "y1");
+    renderLine(x2_list, y + GRID_SIZE * 3, "x2");
+    renderLine(y2_list, x + GRID_SIZE * 6, "y2");
   };
 
   const isDropDisabled = (
@@ -439,6 +502,7 @@ function App() {
           }
         }}
         onDragEnd={({ active, over, delta }) => {
+          setLineTargets({});
           console.log("onDragEnd", active, over, delta);
 
           const activeContainer = findContainer(active.id);
@@ -518,13 +582,12 @@ function App() {
               setRooms((items) => {
                 const item = items[activeId as UniqueIdentifier];
 
-                delete item.x;
-                delete item.y;
-
                 return {
                   ...items,
                   [activeId as UniqueIdentifier]: {
                     ...(item ?? {}),
+                    x: 0,
+                    y: 0,
                     pedding: true,
                   } as Room,
                 };
@@ -547,6 +610,28 @@ function App() {
           }
 
           setActiveId(null);
+        }}
+        onDragMove={({ active, over, delta }) => {
+          console.log("onDragMove", active, over);
+          if (over) {
+            const overContainer = findContainer(over.id);
+
+            if (overContainer === "V") {
+              const originalActiveContainer = findContainer(
+                active.id,
+                clonedItems as Items
+              );
+
+              const { x, y } = getPositionCoordinates({
+                originalActiveContainer,
+                delta,
+              });
+
+              updateLineTargets(x, y);
+            } else {
+              setLineTargets({});
+            }
+          }
         }}
         onDragCancel={onDragCancel}
       >
@@ -628,6 +713,22 @@ function App() {
           </DragOverlay>,
           document.body
         )}
+        {lineTargets &&
+          Object.keys(lineTargets).length > 0 &&
+          createPortal(
+            Object.entries(lineTargets).map(([key, target]) => (
+              <div
+                key={key}
+                style={{
+                  position: "absolute",
+                  border: "1px dashed #0f9096",
+                  zIndex: 1,
+                  ...(target as object),
+                }}
+              />
+            )),
+            document.querySelectorAll(".operateArea")[1]
+          )}
       </DndContext>
       {/* {visible && (
         <Modal
